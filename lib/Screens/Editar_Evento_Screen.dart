@@ -1,4 +1,5 @@
 import 'package:calendary_notifications/Services/Functions_service.dart';
+import 'package:calendary_notifications/Services/notifications_service.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -37,6 +38,10 @@ class _EditarEventoScreenState extends State<EditarEventoScreen> {
 
   Future<void> guardarCambios() async {
     try {
+      await NotificationService().cancelScheduledNotifications(
+        widget.evento.id,
+      );
+
       await editarEvento(
         idEvento: widget.evento.id,
         nombre: nombreController.text.trim(),
@@ -44,6 +49,15 @@ class _EditarEventoScreenState extends State<EditarEventoScreen> {
         fecha: fecha!,
         descripcion: descripcionController.text.trim(),
       );
+
+      await NotificationService().scheduleEventNotifications(
+        eventId: widget.evento.id,
+        title: nombreController.text.trim(),
+        eventDate: fecha!,
+        description: descripcionController.text.trim(),
+        eventType: tipoEvento, // Pasamos el tipo de evento
+      );
+
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('✅ Evento actualizado correctamente')),
       );

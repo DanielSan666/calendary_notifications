@@ -1,11 +1,18 @@
-import 'package:calendary_notifications/Services/Add_Events_Service.dart';
+import 'package:calendary_notifications/Services/Event_Service.dart';
+import 'package:calendary_notifications/Services/notifications_service.dart';
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import 'package:calendary_notifications/Screens/EventosDelMesScreen.dart';
+import 'package:calendary_notifications/Services/Add_Events_Service.dart';
 import 'package:delightful_toast/delight_toast.dart';
 import 'package:delightful_toast/toast/components/toast_card.dart';
 import 'package:delightful_toast/toast/utils/enums.dart';
+import 'package:intl/intl.dart';
 
 class AgregarEventoScreen extends StatefulWidget {
-  AgregarEventoScreen({super.key});
+  final bool fromMonthScreen;
+
+  const AgregarEventoScreen({super.key, this.fromMonthScreen = false});
 
   @override
   State<AgregarEventoScreen> createState() => _AgregarEventoScreenState();
@@ -42,12 +49,28 @@ class _AgregarEventoScreenState extends State<AgregarEventoScreen> {
 
   Future<void> _guardarEvento() async {
     try {
-      await agregarEvento(
+      if (fecha == null || nombreController.text.isEmpty) {
+        throw Exception('Datos incompletos');
+      }
+
+      final eventId = await agregarEvento(
         nombre: nombreController.text.trim(),
         tipo: tipoEvento,
         fecha: fecha!,
         descripcion: descripcionController.text.trim(),
       );
+
+      await NotificationService().scheduleEventNotifications(
+        eventId: eventId,
+        title: nombreController.text.trim(),
+        eventDate: fecha!,
+        description: descripcionController.text.trim(),
+        eventType: tipoEvento, // Pasamos el tipo de evento
+      );
+
+      final eventService = Provider.of<EventService>(context, listen: false);
+      eventService.markForRefresh();
+
       DelightToastBar(
         builder:
             (context) => const ToastCard(
@@ -62,7 +85,21 @@ class _AgregarEventoScreenState extends State<AgregarEventoScreen> {
         snackbarDuration: Durations.extralong4,
       ).show(context);
 
-      Navigator.pop(context);
+      if (widget.fromMonthScreen) {
+        await Future.delayed(const Duration(milliseconds: 300));
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(
+            builder:
+                (context) => EventosDelMesScreen(
+                  mes: DateFormat('MMMM', 'es_ES').format(fecha!),
+                  key: UniqueKey(),
+                ),
+          ),
+        );
+      } else {
+        Navigator.pop(context);
+      }
     } catch (e) {
       DelightToastBar(
         builder:
@@ -86,7 +123,7 @@ class _AgregarEventoScreenState extends State<AgregarEventoScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFEFFCF5), // Verde claro
+      backgroundColor: const Color(0xFFEFFCF5),
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,

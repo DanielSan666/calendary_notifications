@@ -9,7 +9,7 @@ class EventosScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFFDF1FC), // fondo rosado claro
+      backgroundColor: const Color(0xFFFDF1FC),
       body: Center(
         child: SingleChildScrollView(
           child: Padding(
@@ -25,10 +25,19 @@ class EventosScreen extends StatelessWidget {
                     color: Colors.black87,
                   ),
                 ),
-                const SizedBox(height: 12),
+                const SizedBox(height: 20),
+
+                // Imagen decorativa (asegúrate de tenerla en assets/)
+                Image.asset(
+                  'assets/img/icon.jpeg', // o la ruta que tú uses
+                  height: 100,
+                  width: 100,
+                ),
+                const SizedBox(height: 20),
 
                 const Text(
                   'Gestiona cumpleaños y eventos especiales',
+                  textAlign: TextAlign.center,
                   style: TextStyle(fontSize: 16, color: Colors.black54),
                 ),
                 const SizedBox(height: 40),
@@ -42,7 +51,7 @@ class EventosScreen extends StatelessWidget {
                     Navigator.push(
                       context,
                       MaterialPageRoute(
-                        builder: (context) => AgregarEventoScreen(),
+                        builder: (context) => const AgregarEventoScreen(),
                       ),
                     );
                   },
@@ -67,7 +76,6 @@ class EventosScreen extends StatelessWidget {
 
                 const SizedBox(height: 40),
 
-                // 🔥 Contador en tiempo real desde Firestore
                 StreamBuilder<QuerySnapshot>(
                   stream:
                       FirebaseFirestore.instance

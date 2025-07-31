@@ -1,9 +1,12 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
 <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+<uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM"/>
+<uses-permission android:name="android.permission.USE_EXACT_ALARM"/>
+<uses-permission android:name="android.permission.VIBRATE"/>
 
     <application
-        android:label="calendary_notifications"
+        android:label="Cumpli"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
         <activity

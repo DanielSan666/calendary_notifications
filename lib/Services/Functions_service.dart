@@ -16,14 +16,5 @@ Future<void> editarEvento({
 }
 
 Future<void> eliminarEvento(String idEvento) async {
-  try {
-    await FirebaseFirestore.instance
-        .collection('eventos')
-        .doc(idEvento)
-        .delete();
-    print('Evento eliminado correctamente.');
-  } catch (e) {
-    print('Error al eliminar el evento: $e');
-    rethrow;
-  }
+  await FirebaseFirestore.instance.collection('eventos').doc(idEvento).delete();
 }

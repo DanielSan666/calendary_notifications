@@ -1,17 +1,20 @@
-import 'package:calendary_notifications/Screens/Agregar_Evento_Screen.dart';
-import 'package:calendary_notifications/Screens/Editar_Evento_Screen.dart';
-import 'package:calendary_notifications/Services/Functions_service.dart';
+import 'package:calendary_notifications/Services/Event_Service.dart';
+import 'package:calendary_notifications/Services/notifications_service.dart';
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:intl/intl.dart';
+import 'package:calendary_notifications/Screens/Editar_Evento_Screen.dart';
+import 'package:calendary_notifications/Services/Functions_service.dart';
 import 'package:delightful_toast/delight_toast.dart';
 import 'package:delightful_toast/toast/components/toast_card.dart';
 import 'package:delightful_toast/toast/utils/enums.dart';
 
 class EventosDelMesScreen extends StatelessWidget {
   final String mes;
+  final Key? key;
 
-  const EventosDelMesScreen({super.key, required this.mes});
+  const EventosDelMesScreen({required this.mes, this.key}) : super(key: key);
 
   int obtenerNumeroMes(String nombreMes) {
     const meses = [
@@ -66,22 +69,28 @@ class EventosDelMesScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final int mesNumero = obtenerNumeroMes(mes);
+    final eventService = Provider.of<EventService>(context, listen: true);
 
     return Scaffold(
       backgroundColor: const Color(0xFFFCF5FF),
-      floatingActionButton: FloatingActionButton(
-        onPressed: () {
-          Navigator.push(
-            context,
-            MaterialPageRoute(builder: (context) => AgregarEventoScreen()),
-          );
-        },
-        backgroundColor: Colors.purple,
-        child: const Icon(Icons.card_giftcard, color: Colors.white),
-      ),
+
       body: SafeArea(
         child: StreamBuilder<QuerySnapshot>(
-          stream: FirebaseFirestore.instance.collection('eventos').snapshots(),
+          stream: FirebaseFirestore.instance
+              .collection('eventos')
+              .orderBy('fecha')
+              .snapshots()
+              .asyncMap((snapshot) async {
+                if (eventService.refreshTrigger > 0) {
+                  await Future.delayed(const Duration(milliseconds: 300));
+                  eventService.resetRefresh();
+                  return await FirebaseFirestore.instance
+                      .collection('eventos')
+                      .orderBy('fecha')
+                      .get();
+                }
+                return snapshot;
+              }),
           builder: (context, snapshot) {
             if (snapshot.connectionState == ConnectionState.waiting) {
               return const Center(child: CircularProgressIndicator());
@@ -135,280 +144,54 @@ class EventosDelMesScreen extends StatelessWidget {
                   padding: const EdgeInsets.symmetric(horizontal: 16),
                   child: Row(
                     children: [
-                      Expanded(
-                        child: Container(
-                          decoration: BoxDecoration(
-                            color: Colors.purple[50],
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          padding: const EdgeInsets.all(16),
-                          child: Column(
-                            children: [
-                              Text(
-                                "🎂 $cantidadCumple",
-                                style: const TextStyle(
-                                  fontSize: 18,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
-                              const SizedBox(height: 4),
-                              const Text(
-                                "Cumpleaños",
-                                style: TextStyle(color: Colors.grey),
-                              ),
-                            ],
-                          ),
-                        ),
+                      _buildStatCard(
+                        context,
+                        count: cantidadCumple,
+                        label: "Cumpleaños",
+                        color: Colors.purple[50]!,
+                        emoji: "🎂",
                       ),
                       const SizedBox(width: 8),
-                      Expanded(
-                        child: Container(
-                          decoration: BoxDecoration(
-                            color: Colors.pink[50],
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          padding: const EdgeInsets.all(16),
-                          child: Column(
-                            children: [
-                              Text(
-                                "🎉 $cantidadEspecial",
-                                style: const TextStyle(
-                                  fontSize: 18,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
-                              const SizedBox(height: 4),
-                              const Text(
-                                "Eventos",
-                                style: TextStyle(color: Colors.grey),
-                              ),
-                            ],
-                          ),
-                        ),
+                      _buildStatCard(
+                        context,
+                        count: cantidadEspecial,
+                        label: "Eventos",
+                        color: Colors.pink[50]!,
+                        emoji: "🎉",
                       ),
                     ],
                   ),
                 ),
                 const SizedBox(height: 12),
                 Expanded(
-                  child:
-                      eventos.isEmpty
-                          ? const Center(
-                            child: Text(
-                              'No hay eventos en este mes',
-                              style: TextStyle(
-                                fontSize: 16,
-                                color: Colors.grey,
+                  child: RefreshIndicator(
+                    onRefresh: () async {
+                      eventService.markForRefresh();
+                    },
+                    child:
+                        eventos.isEmpty
+                            ? const Center(
+                              child: Text(
+                                'No hay eventos en este mes',
+                                style: TextStyle(
+                                  fontSize: 16,
+                                  color: Colors.grey,
+                                ),
                               ),
+                            )
+                            : ListView.builder(
+                              itemCount: eventosPorDia.length,
+                              itemBuilder: (context, index) {
+                                final dia = eventosPorDia.keys.elementAt(index);
+                                final eventosDelDia = eventosPorDia[dia]!;
+                                return _buildDayEvents(
+                                  context,
+                                  dia,
+                                  eventosDelDia,
+                                );
+                              },
                             ),
-                          )
-                          : ListView.builder(
-                            itemCount: eventosPorDia.length,
-                            itemBuilder: (context, index) {
-                              final dia = eventosPorDia.keys.elementAt(index);
-                              final eventosDelDia = eventosPorDia[dia]!;
-
-                              return Padding(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 16,
-                                  vertical: 6,
-                                ),
-                                child: Column(
-                                  children:
-                                      eventosDelDia.map((evento) {
-                                        final nombre = evento['nombre'];
-                                        final tipo = evento['tipo'];
-                                        final descripcion =
-                                            evento['descripcion'];
-                                        final fecha =
-                                            (evento['fecha'] as Timestamp)
-                                                .toDate();
-                                        final fechaFormateada = DateFormat(
-                                          'EEEE, d \'de\' MMMM',
-                                          'es_ES',
-                                        ).format(fecha);
-                                        final icono =
-                                            tipo == 'cumpleaños' ? '🎂' : '🎉';
-
-                                        return Card(
-                                          shape: RoundedRectangleBorder(
-                                            borderRadius: BorderRadius.circular(
-                                              16,
-                                            ),
-                                          ),
-                                          elevation: 2,
-                                          child: Padding(
-                                            padding: const EdgeInsets.all(12),
-                                            child: Column(
-                                              crossAxisAlignment:
-                                                  CrossAxisAlignment.start,
-                                              children: [
-                                                ListTile(
-                                                  leading: CircleAvatar(
-                                                    backgroundColor:
-                                                        Colors.purple[50],
-                                                    child: Text(
-                                                      '$dia',
-                                                      style: const TextStyle(
-                                                        color: Colors.purple,
-                                                        fontWeight:
-                                                            FontWeight.bold,
-                                                      ),
-                                                    ),
-                                                  ),
-                                                  title: Text(
-                                                    '$icono $nombre',
-                                                    style: const TextStyle(
-                                                      fontWeight:
-                                                          FontWeight.bold,
-                                                      fontSize: 16,
-                                                    ),
-                                                  ),
-                                                  subtitle: Column(
-                                                    crossAxisAlignment:
-                                                        CrossAxisAlignment
-                                                            .start,
-                                                    children: [
-                                                      Text(fechaFormateada),
-                                                      const SizedBox(height: 4),
-                                                      Text(
-                                                        tipo == 'cumpleaños'
-                                                            ? 'Cumpleaños'
-                                                            : 'Evento',
-                                                        style: const TextStyle(
-                                                          fontWeight:
-                                                              FontWeight.w500,
-                                                        ),
-                                                      ),
-                                                    ],
-                                                  ),
-                                                  trailing: Row(
-                                                    mainAxisSize:
-                                                        MainAxisSize.min,
-                                                    children: [
-                                                      IconButton(
-                                                        icon: const Icon(
-                                                          Icons.edit,
-                                                          color: Colors.blue,
-                                                        ),
-                                                        onPressed: () {
-                                                          Navigator.push(
-                                                            context,
-                                                            MaterialPageRoute(
-                                                              builder:
-                                                                  (
-                                                                    context,
-                                                                  ) => EditarEventoScreen(
-                                                                    evento:
-                                                                        evento,
-                                                                  ),
-                                                            ),
-                                                          );
-                                                        },
-                                                      ),
-                                                      IconButton(
-                                                        icon: const Icon(
-                                                          Icons.delete,
-                                                          color: Colors.red,
-                                                        ),
-                                                        onPressed: () async {
-                                                          final confirm = await showDialog<
-                                                            bool
-                                                          >(
-                                                            context: context,
-                                                            builder:
-                                                                (
-                                                                  context,
-                                                                ) => AlertDialog(
-                                                                  title: const Text(
-                                                                    '¿Eliminar evento?',
-                                                                  ),
-                                                                  content:
-                                                                      const Text(
-                                                                        'Esta acción no se puede deshacer.',
-                                                                      ),
-                                                                  actions: [
-                                                                    TextButton(
-                                                                      onPressed:
-                                                                          () => Navigator.pop(
-                                                                            context,
-                                                                            false,
-                                                                          ),
-                                                                      child: const Text(
-                                                                        'Cancelar',
-                                                                      ),
-                                                                    ),
-                                                                    TextButton(
-                                                                      onPressed:
-                                                                          () => Navigator.pop(
-                                                                            context,
-                                                                            true,
-                                                                          ),
-                                                                      child: const Text(
-                                                                        'Eliminar',
-                                                                      ),
-                                                                    ),
-                                                                  ],
-                                                                ),
-                                                          );
-
-                                                          if (confirm == true) {
-                                                            try {
-                                                              await eliminarEvento(
-                                                                evento.id,
-                                                              );
-                                                              if (context
-                                                                  .mounted) {
-                                                                mostrarToastEliminado(
-                                                                  context,
-                                                                );
-                                                              }
-                                                            } catch (e) {
-                                                              if (context
-                                                                  .mounted) {
-                                                                mostrarToastError(
-                                                                  context,
-                                                                  e,
-                                                                );
-                                                              }
-                                                            }
-                                                          }
-                                                        },
-                                                      ),
-                                                    ],
-                                                  ),
-                                                ),
-                                                if (descripcion.isNotEmpty)
-                                                  Padding(
-                                                    padding:
-                                                        const EdgeInsets.symmetric(
-                                                          horizontal: 16,
-                                                        ),
-                                                    child: Container(
-                                                      width: double.infinity,
-                                                      padding:
-                                                          const EdgeInsets.all(
-                                                            12,
-                                                          ),
-                                                      decoration: BoxDecoration(
-                                                        color: Colors.grey[100],
-                                                        borderRadius:
-                                                            BorderRadius.circular(
-                                                              8,
-                                                            ),
-                                                      ),
-                                                      child: Text(descripcion),
-                                                    ),
-                                                  ),
-                                              ],
-                                            ),
-                                          ),
-                                        );
-                                      }).toList(),
-                                ),
-                              );
-                            },
-                          ),
+                  ),
                 ),
               ],
             );
@@ -416,5 +199,186 @@ class EventosDelMesScreen extends StatelessWidget {
         ),
       ),
     );
+  }
+
+  Widget _buildStatCard(
+    BuildContext context, {
+    required int count,
+    required String label,
+    required Color color,
+    required String emoji,
+  }) {
+    return Expanded(
+      child: Container(
+        decoration: BoxDecoration(
+          color: color,
+          borderRadius: BorderRadius.circular(12),
+        ),
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          children: [
+            Text(
+              "$emoji $count",
+              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 4),
+            Text(label, style: const TextStyle(color: Colors.grey)),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildDayEvents(
+    BuildContext context,
+    int dia,
+    List<DocumentSnapshot> eventosDelDia,
+  ) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+      child: Column(
+        children:
+            eventosDelDia.map((evento) {
+              final nombre = evento['nombre'];
+              final tipo = evento['tipo'];
+              final descripcion = evento['descripcion'];
+              final fecha = (evento['fecha'] as Timestamp).toDate();
+              final fechaFormateada = DateFormat(
+                'EEEE, d \'de\' MMMM',
+                'es_ES',
+              ).format(fecha);
+              final icono = tipo == 'cumpleaños' ? '🎂' : '🎉';
+
+              return Card(
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                elevation: 2,
+                child: Padding(
+                  padding: const EdgeInsets.all(12),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      ListTile(
+                        leading: CircleAvatar(
+                          backgroundColor: Colors.purple[50],
+                          child: Text(
+                            '$dia',
+                            style: const TextStyle(
+                              color: Colors.purple,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ),
+                        title: Text(
+                          '$icono $nombre',
+                          style: const TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 16,
+                          ),
+                        ),
+                        subtitle: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(fechaFormateada),
+                            const SizedBox(height: 4),
+                            Text(
+                              tipo == 'cumpleaños' ? 'Cumpleaños' : 'Evento',
+                              style: const TextStyle(
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                          ],
+                        ),
+                        trailing: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            IconButton(
+                              icon: const Icon(Icons.edit, color: Colors.blue),
+                              onPressed: () {
+                                Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder:
+                                        (context) =>
+                                            EditarEventoScreen(evento: evento),
+                                  ),
+                                );
+                              },
+                            ),
+                            IconButton(
+                              icon: const Icon(Icons.delete, color: Colors.red),
+                              onPressed:
+                                  () =>
+                                      _confirmarEliminarEvento(context, evento),
+                            ),
+                          ],
+                        ),
+                      ),
+                      if (descripcion.isNotEmpty)
+                        Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 16),
+                          child: Container(
+                            width: double.infinity,
+                            padding: const EdgeInsets.all(12),
+                            decoration: BoxDecoration(
+                              color: Colors.grey[100],
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: Text(descripcion),
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+              );
+            }).toList(),
+      ),
+    );
+  }
+
+  Future<void> _confirmarEliminarEvento(
+    BuildContext context,
+    DocumentSnapshot evento,
+  ) async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder:
+          (context) => AlertDialog(
+            title: const Text('¿Eliminar evento?'),
+            content: const Text('Esta acción no se puede deshacer.'),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context, false),
+                child: const Text('Cancelar'),
+              ),
+              TextButton(
+                onPressed: () => Navigator.pop(context, true),
+                child: const Text('Eliminar'),
+              ),
+            ],
+          ),
+    );
+
+    if (confirm == true && context.mounted) {
+      try {
+        // 1. Primero cancelamos las notificaciones programadas
+        await NotificationService().cancelScheduledNotifications(evento.id);
+
+        // 2. Luego eliminamos el evento de Firestore
+        await eliminarEvento(evento.id);
+
+        // 3. Actualizamos el estado
+        final eventService = Provider.of<EventService>(context, listen: false);
+        eventService.markForRefresh();
+
+        // 4. Mostramos confirmación
+        mostrarToastEliminado(context);
+      } catch (e) {
+        if (context.mounted) {
+          mostrarToastError(context, e);
+        }
+      }
+    }
   }
 }

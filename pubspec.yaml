@@ -54,6 +54,7 @@ dependencies:
   provider: ^6.1.5
   mocktail: ^1.0.4
   shared_preferences: ^2.5.3
+  device_info_plus: ^11.5.0
 
   
 

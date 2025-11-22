@@ -8,6 +8,7 @@ class EventService with ChangeNotifier {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   final NotificationService _notificationService = NotificationService();
   StreamSubscription<QuerySnapshot>? _eventsSubscription;
+  Timer? _notificationRefreshTimer;
   int _refreshTrigger = 0;
 
   // Inicializa el listener de eventos en tiempo real
@@ -18,24 +19,34 @@ class EventService with ChangeNotifier {
         .snapshots()
         .listen((snapshot) async {
           await _syncEventsAndNotifications(snapshot.docs);
-          markForRefresh(); // Notifica a los widgets para que se actualicen
+          markForRefresh();
         });
+
+    // Reprogramar notificaciones cada 6 meses para cumpleaños
+    _notificationRefreshTimer = Timer.periodic(const Duration(days: 180), (_) {
+      _refreshNotifications();
+    });
+  }
+
+  Future<void> _refreshNotifications() async {
+    final docs = await getEventos();
+    await _syncEventsAndNotifications(docs);
   }
 
   // Sincroniza eventos y programa notificaciones
   Future<void> _syncEventsAndNotifications(
-    List<QueryDocumentSnapshot> docs,
+    List<QueryDocumentSnapshot<Map<String, dynamic>>> docs,
   ) async {
     await _notificationService.cancelAllNotifications();
 
     for (var doc in docs) {
-      final data = doc.data() as Map<String, dynamic>;
+      final data = doc.data();
       await _notificationService.scheduleEventNotifications(
         eventId: doc.id,
         title: data['nombre'],
         eventDate: (data['fecha'] as Timestamp).toDate(),
         description: data['descripcion'] ?? '',
-        eventType: data['tipo'] ?? 'especial', // Usamos el tipo del evento
+        eventType: data['tipo'] ?? 'especial',
       );
     }
   }
@@ -133,6 +144,7 @@ class EventService with ChangeNotifier {
   @override
   void dispose() {
     _eventsSubscription?.cancel();
+    _notificationRefreshTimer?.cancel();
     super.dispose();
   }
 }

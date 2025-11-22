@@ -45,77 +45,141 @@ class NotificationService {
       final localTimeZone = tz.local;
       final now = tz.TZDateTime.now(localTimeZone);
 
-      // Notificación 1 día antes a las 9 AM
-      final dayBefore = tz.TZDateTime(
-        localTimeZone,
-        eventDate.year,
-        eventDate.month,
-        eventDate.day - 1, // Día anterior
-        9, // Hora: 9 AM
-        0, // Minutos
-      );
-
-      if (dayBefore.isAfter(now)) {
-        String dayBeforeTitle = '';
-        String dayBeforeBody = '';
-
-        if (eventType == 'cumpleaños') {
-          dayBeforeTitle = '🎉 Mañana es un cumpleaños!';
-          dayBeforeBody = 'No olvides que mañana es el cumpleaños de $title';
-        } else {
-          dayBeforeTitle = '📅 Recordatorio de evento';
-          dayBeforeBody = 'Mañana tienes este evento: $title';
-        }
-
-        if (description?.isNotEmpty ?? false) {
-          dayBeforeBody += '\n\n$description';
-        }
-
-        await _scheduleNotification(
-          id: eventId.hashCode,
-          title: dayBeforeTitle,
-          body: dayBeforeBody,
-          scheduledDate: dayBefore,
-          payload: {'eventId': eventId, 'type': 'day_before'},
+      if (eventType == 'cumpleaños') {
+        await _scheduleBirthdayNotifications(
+          eventId: eventId,
+          title: title,
+          eventDay: eventDate.day,
+          eventMonth: eventDate.month,
+          description: description,
+          now: now,
+          localTimeZone: localTimeZone,
         );
-      }
-
-      // Notificación el día del evento a las 9 AM
-      final dayOf = tz.TZDateTime(
-        localTimeZone,
-        eventDate.year,
-        eventDate.month,
-        eventDate.day,
-        9, // Hora: 9 AM
-        0, // Minutos
-      );
-
-      if (dayOf.isAfter(now)) {
-        String dayOfTitle = '';
-        String dayOfBody = '';
-
-        if (eventType == 'cumpleaños') {
-          dayOfTitle = '🎂 ¡Feliz cumpleaños!';
-          dayOfBody = 'Hoy es el cumpleaños de $title 🎉';
-        } else {
-          dayOfTitle = '⏰ ¡Hoy es el día!';
-          dayOfBody = 'No olvides que hoy tienes: $title';
-        }
-
-        if (description?.isNotEmpty ?? false) {
-          dayOfBody += '\n\n$description';
-        }
-
-        await _scheduleNotification(
-          id: (eventId.hashCode + 1),
-          title: dayOfTitle,
-          body: dayOfBody,
-          scheduledDate: dayOf,
-          payload: {'eventId': eventId, 'type': 'day_of'},
+      } else {
+        await _scheduleRegularEventNotifications(
+          eventId: eventId,
+          title: title,
+          eventDate: eventDate,
+          description: description,
+          now: now,
+          localTimeZone: localTimeZone,
         );
       }
     } catch (e) {
       debugPrint("Error al programar notificaciones: $e");
+    }
+  }
+
+  Future<void> _scheduleBirthdayNotifications({
+    required String eventId,
+    required String title,
+    required int eventDay,
+    required int eventMonth,
+    required String? description,
+    required tz.TZDateTime now,
+    required tz.Location localTimeZone,
+  }) async {
+    // Notificación 1 día antes
+    var notificationYear = now.year;
+    var dayBefore = tz.TZDateTime(
+      localTimeZone,
+      notificationYear,
+      eventMonth,
+      eventDay - 1,
+      9, // Hora: 9 AM
+      0,
+    );
+
+    // Si ya pasó la fecha este año, programar para el próximo año
+    if (dayBefore.isBefore(now)) {
+      notificationYear++;
+      dayBefore = tz.TZDateTime(
+        localTimeZone,
+        notificationYear,
+        eventMonth,
+        eventDay - 1,
+        9,
+        0,
+      );
+    }
+
+    await _scheduleNotification(
+      id: eventId.hashCode,
+      title: '🎉 Mañana es un cumpleaños!',
+      body:
+          'No olvides que mañana es el cumpleaños de $title${description?.isNotEmpty ?? false ? '\n\n$description' : ''}',
+      scheduledDate: dayBefore,
+      payload: {'eventId': eventId, 'type': 'day_before'},
+    );
+
+    // Notificación el día del cumpleaños
+    final dayOf = tz.TZDateTime(
+      localTimeZone,
+      notificationYear,
+      eventMonth,
+      eventDay,
+      9, // Hora: 9 AM
+      0,
+    );
+
+    await _scheduleNotification(
+      id: (eventId.hashCode + 1),
+      title: '🎂 ¡Feliz cumpleaños!',
+      body:
+          'Hoy es el cumpleaños de $title 🎉${description?.isNotEmpty ?? false ? '\n\n$description' : ''}',
+      scheduledDate: dayOf,
+      payload: {'eventId': eventId, 'type': 'day_of'},
+    );
+  }
+
+  Future<void> _scheduleRegularEventNotifications({
+    required String eventId,
+    required String title,
+    required DateTime eventDate,
+    required String? description,
+    required tz.TZDateTime now,
+    required tz.Location localTimeZone,
+  }) async {
+    // Notificación 1 día antes
+    final dayBefore = tz.TZDateTime(
+      localTimeZone,
+      eventDate.year,
+      eventDate.month,
+      eventDate.day - 1,
+      9, // Hora: 9 AM
+      0,
+    );
+
+    if (dayBefore.isAfter(now)) {
+      await _scheduleNotification(
+        id: eventId.hashCode,
+        title: '📅 Recordatorio de evento',
+        body:
+            'Mañana tienes este evento: $title${description?.isNotEmpty ?? false ? '\n\n$description' : ''}',
+        scheduledDate: dayBefore,
+        payload: {'eventId': eventId, 'type': 'day_before'},
+      );
+    }
+
+    // Notificación el día del evento
+    final dayOf = tz.TZDateTime(
+      localTimeZone,
+      eventDate.year,
+      eventDate.month,
+      eventDate.day,
+      9, // Hora: 9 AM
+      0,
+    );
+
+    if (dayOf.isAfter(now)) {
+      await _scheduleNotification(
+        id: (eventId.hashCode + 1),
+        title: '⏰ ¡Hoy es el día!',
+        body:
+            'No olvides que hoy tienes: $title${description?.isNotEmpty ?? false ? '\n\n$description' : ''}',
+        scheduledDate: dayOf,
+        payload: {'eventId': eventId, 'type': 'day_of'},
+      );
     }
   }
 
